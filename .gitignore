@@ -1,0 +1,20 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Environment secrets — never commit these
+backend/.env
+
+# ML artifacts — too large for git
+backend/data/
+backend/chroma_db/
+*.model
+backend/models/
+
+# OS
+.DS_Store.idea/
+.DS_Store
+.idea/
