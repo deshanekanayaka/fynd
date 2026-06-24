@@ -43,6 +43,13 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
         safe_id = paper["arxiv_id"].replace("/", "_")
         output_path = RAW_DATA_DIR / f"{safe_id}.json"
 
+        # Extra guard: skip if the ID contains any parent directory traversal tokens
+        # even after sanitization. This is a defense-in-depth policy since we also
+        # verify the final path below. The requirement is to skip malicious IDs.
+        if ".." in paper["arxiv_id"] or ".." in safe_id:
+            print(f"WARNING: Suspicious ID detected (contains '..'): {paper['arxiv_id']}, skipping")
+            continue
+
         # Verify the resolved path stays inside RAW_DATA_DIR.
         # This guards against any path traversal if an ID somehow contains "../"
         if not output_path.resolve().is_relative_to(RAW_DATA_DIR.resolve()):
