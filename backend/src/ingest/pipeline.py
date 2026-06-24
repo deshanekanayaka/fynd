@@ -2,6 +2,7 @@ import json
 import logging
 import argparse
 from pathlib import Path
+from tqdm.contrib.logging import logging_redirect_tqdm
 from fetch_papers import fetch_arxiv_papers, enrich_with_semantic_scholar
 
 logging.basicConfig(level=logging.INFO)
@@ -16,19 +17,19 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
     Full ingestion pipeline: fetch from ArXiv → enrich with S2 → save as JSON.
     dry_run=True prints what would happen without writing any files.
     """
-    logger.info(f"Starting ingestion: query='{query}', max_results={max_results}")
+    print(f"Starting ingestion: query='{query}', max_results={max_results}")
 
-    # Step 1 — fetch from ArXiv
-    papers = fetch_arxiv_papers(query, max_results)
+    with logging_redirect_tqdm():
+        # Step 1 — fetch from ArXiv
+        papers = fetch_arxiv_papers(query, max_results)
 
-    # Step 2 — enrich with Semantic Scholar
-    papers = enrich_with_semantic_scholar(papers)
+        # Step 2 — enrich with Semantic Scholar
+        papers = enrich_with_semantic_scholar(papers)
 
     if dry_run:
-        # Print a summary of what would be saved — useful when tweaking the pipeline
-        logger.info(f"DRY RUN — would save {len(papers)} papers:")
+        print(f"DRY RUN — would save {len(papers)} papers:")
         for p in papers:
-            logger.info(f"  {p['arxiv_id']} | {p['title'][:60]} | citations: {p['citation_count']}")
+            print(f"  {p['arxiv_id']} | {p['title'][:60]} | citations: {p['citation_count']}")
         return
 
     # Step 3 — save each paper as its own JSON file, named by ArXiv ID
@@ -36,11 +37,21 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
 
     saved = 0
     for paper in papers:
-        output_path = RAW_DATA_DIR / f"{paper['arxiv_id']}.json"
+        # Sanitize the arxiv_id before using it as a filename.
+        # Even though fetch_papers already sanitizes, we do it again here defensively —
+        # pipeline.py shouldn't trust that its inputs are always coming from fetch_papers.
+        safe_id = paper["arxiv_id"].replace("/", "_")
+        output_path = RAW_DATA_DIR / f"{safe_id}.json"
+
+        # Verify the resolved path stays inside RAW_DATA_DIR.
+        # This guards against any path traversal if an ID somehow contains "../"
+        if not output_path.resolve().is_relative_to(RAW_DATA_DIR.resolve()):
+            print(f"WARNING: Unsafe path detected for ID {paper['arxiv_id']}, skipping")
+            continue
 
         # Skip papers we've already fetched — don't re-download on repeated runs
         if output_path.exists():
-            logger.info(f"Already exists, skipping: {paper['arxiv_id']}")
+            print(f"Already exists, skipping: {paper['arxiv_id']}")
             continue
 
         with open(output_path, "w") as f:
@@ -48,7 +59,7 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
 
         saved += 1
 
-    logger.info(f"Saved {saved} new papers to {RAW_DATA_DIR}")
+    print(f"Saved {saved} new papers to {RAW_DATA_DIR}")
 
 
 if __name__ == "__main__":

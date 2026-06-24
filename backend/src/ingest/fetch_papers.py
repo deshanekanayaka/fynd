@@ -1,3 +1,4 @@
+import re
 from tqdm import tqdm
 import arxiv
 import time
@@ -34,8 +35,12 @@ def fetch_arxiv_papers(query: str, max_results: int = 20) -> list[dict]:
 
     for result in client.results(search):
         # result.entry_id looks like "https://arxiv.org/abs/2005.11401v4"
-        # We extract just "2005.11401" — the clean ArXiv ID we'll use everywhere
-        arxiv_id = result.entry_id.split("/abs/")[-1].split("v")[0]
+        # Step 1: extract everything after "/abs/" → "2005.11401v4"
+        # Step 2: strip trailing version suffix (v1, v2, etc.) with regex → "2005.11401"
+        # Step 3: replace any slashes (old-style IDs like "cs/0612045") with underscores
+        #         so the ID is safe to use as a filename
+        raw_id = result.entry_id.split("/abs/")[-1]
+        arxiv_id = re.sub(r'v\d+$', '', raw_id).replace("/", "_")
 
         paper = {
             "arxiv_id": arxiv_id,
@@ -63,24 +68,24 @@ def enrich_with_semantic_scholar(papers: list[dict]) -> list[dict]:
     Mutates papers in place and returns the same list.
     """
     for paper in tqdm(papers, desc="Enriching with Semantic Scholar", unit="paper"):
-            try:
-                s2_paper = sch.get_paper(
-                    f"ArXiv:{paper['arxiv_id']}",
-                    fields=["citationCount", "openAccessPdf"]
+        try:
+            s2_paper = sch.get_paper(
+                f"ArXiv:{paper['arxiv_id']}",
+                fields=["citationCount", "openAccessPdf"]
+            )
+
+            if s2_paper:
+                paper["citation_count"] = s2_paper.citationCount
+                paper["s2_pdf_url"] = (
+                    s2_paper.openAccessPdf.get("url")
+                    if s2_paper.openAccessPdf
+                    else None
                 )
 
-                if s2_paper:
-                    paper["citation_count"] = s2_paper.citationCount
-                    paper["s2_pdf_url"] = (
-                        s2_paper.openAccessPdf.get("url")
-                        if s2_paper.openAccessPdf
-                        else None
-                    )
+        except Exception as e:
+            logger.warning(f"Semantic Scholar lookup failed for {paper['arxiv_id']}: {e}")
 
-            except Exception as e:
-                logger.warning(f"Semantic Scholar lookup failed for {paper['arxiv_id']}: {e}")
-
-            time.sleep(1)
+        time.sleep(1)
 
     logger.info(f"Enrichment complete for {len(papers)} papers")
     return papers
