@@ -46,12 +46,19 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
         safe_id = paper["arxiv_id"].replace("/", "_")
         output_path = RAW_DATA_DIR / f"{safe_id}.json"
 
+        # Extra guard: skip if the ID contains any parent directory traversal tokens
+        if ".." in paper["arxiv_id"] or ".." in safe_id:
+            print(f"WARNING: Suspicious ID detected (contains '..'): {paper['arxiv_id']}, skipping")
+            continue
+
+        # Verify the resolved path stays inside RAW_DATA_DIR
+        if not output_path.resolve().is_relative_to(RAW_DATA_DIR.resolve()):
+            print(f"WARNING: Unsafe path detected for ID {paper['arxiv_id']}, skipping")
+            continue
+
         if output_path.exists():
             logger.info(f"[{paper['arxiv_id']}] Already exists, skipping raw save")
         else:
-            if output_path.resolve().parent != RAW_DATA_DIR.resolve():
-                logger.error(f"[{paper['arxiv_id']}] Path traversal detected, skipping")
-                continue
             with open(output_path, "w") as f:
                 json.dump(paper, f, indent=2)
             saved += 1
