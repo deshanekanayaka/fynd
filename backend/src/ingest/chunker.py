@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 SECTION_PRIORITIES = {
     "limitations":   (1, "limitations"),
     "future work":   (2, "future_work"),
+    "discussion":    (2, "discussion"),
     "conclusion":    (3, "conclusion"),
     "conclusions":   (3, "conclusion"),
     "abstract":      (4, "abstract"),
@@ -80,7 +81,7 @@ def _detect_sections(text: str, arxiv_id: str) -> dict[str, str]:
     # re.IGNORECASE handles "LIMITATIONS", "Limitations", "limitations"
     # re.MULTILINE makes ^ match start of each line, not just start of string
     heading_pattern = re.compile(
-        r"^(?:\d+\.?\s+)?(limitations|future work|conclusion[s]?|abstract|introduction)\s*$",
+        r"^(?:\d+\.?\s+)?(limitations|future work|discussion|conclusion[s]?|abstract|introduction)\s*$",
         re.IGNORECASE | re.MULTILINE
     )
 
@@ -132,7 +133,10 @@ def _split_into_chunks(text: str) -> list[str]:
 
 def _get_priority(section_name: str) -> int:
     """Return the priority number for a section name. Body text gets lowest priority."""
+    # Normalise to lowercase with spaces so keywords match regardless of
+    # whether the section name uses underscores or spaces
+    normalised = section_name.lower().replace("_", " ")
     for keyword, (priority, _) in SECTION_PRIORITIES.items():
-        if keyword in section_name.lower():
+        if keyword in normalised:
             return priority
     return 6  # Default: body text

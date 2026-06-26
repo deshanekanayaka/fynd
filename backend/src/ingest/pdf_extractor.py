@@ -5,6 +5,9 @@ import pdfplumber
 
 logger = logging.getLogger(__name__)
 
+# Maximum PDF size we'll process — 50MB is generous for an academic paper
+MAX_PDF_BYTES = 50 * 1024 * 1024
+
 
 def extract_pdf_text(paper: dict) -> str | None:
     """
@@ -30,6 +33,7 @@ def extract_pdf_text(paper: dict) -> str | None:
 def _download_and_extract(url: str, arxiv_id: str) -> str | None:
     """
     Download a PDF from a URL and extract its text.
+    Streams the response incrementally and enforces a MAX_PDF_BYTES limit.
     Returns extracted text string, or None if anything goes wrong.
     """
     try:
@@ -41,15 +45,27 @@ def _download_and_extract(url: str, arxiv_id: str) -> str | None:
             logger.warning(f"[{arxiv_id}] URL did not return a PDF: {content_type}")
             return None
 
-        pdf_bytes = io.BytesIO(response.content)
+        # Read response incrementally to avoid loading huge files into memory
+        # Stop and abort if the PDF exceeds MAX_PDF_BYTES
+        chunks = []
+        total_bytes = 0
+        for chunk in response.iter_content(chunk_size=8192):
+            total_bytes += len(chunk)
+            if total_bytes > MAX_PDF_BYTES:
+                logger.warning(f"[{arxiv_id}] PDF exceeded {MAX_PDF_BYTES} bytes, aborting")
+                return None
+            chunks.append(chunk)
 
-        # Extract text page by page using word-level extraction for better spacing
+        pdf_bytes = io.BytesIO(b"".join(chunks))
+
+        # Extract text page by page using word-level extraction.
+        # x_tolerance_ratio=0.15 sets the space-detection threshold to 15% of
+        # font size — this correctly handles LaTeX-generated ArXiv PDFs where
+        # character gaps are smaller than the default fixed 3px tolerance.
+        # See DECISIONS.md ADR-001 for full context.
         pages_text = []
         with pdfplumber.open(pdf_bytes) as pdf:
             for page in pdf.pages:
-                # extract_words returns individual word bounding boxes
-                # x_tolerance=3, y_tolerance=3 are the defaults — words further
-                # apart than 3 points get treated as separate words
                 words = page.extract_words(x_tolerance_ratio=0.15, y_tolerance=3)
                 if not words:
                     continue
@@ -59,15 +75,11 @@ def _download_and_extract(url: str, arxiv_id: str) -> str | None:
                 current_top = None
 
                 for word in words:
-                    # y position of word on page — words on the same line
-                    # have the same (or very close) 'top' value
                     word_top = round(word["top"])
 
                     if current_top is None:
                         current_top = word_top
 
-                    # If this word is more than 5 points below the current line,
-                    # it's a new line — flush the current line and start fresh
                     if abs(word_top - current_top) > 5:
                         lines.append(" ".join(current_line))
                         current_line = []
@@ -75,7 +87,6 @@ def _download_and_extract(url: str, arxiv_id: str) -> str | None:
 
                     current_line.append(word["text"])
 
-                # Don't forget the last line
                 if current_line:
                     lines.append(" ".join(current_line))
 

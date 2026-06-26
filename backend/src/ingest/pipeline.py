@@ -10,10 +10,7 @@ from chunker import chunk_paper, save_chunks
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Where raw papers land — relative to backend/
 RAW_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
-
-# New — where chunks land
 CHUNKS_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "chunks"
 
 
@@ -21,15 +18,12 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
     """
     Full ingestion pipeline:
     fetch → enrich → save raw → extract PDF → chunk → save chunks
-    dry_run=True prints what would happen without writing any files.
+    dry_run=True logs what would happen without writing any files.
     """
     logger.info(f"Starting ingestion: query='{query}', max_results={max_results}")
 
     with logging_redirect_tqdm():
-        # Step 1 — fetch from ArXiv
         papers = fetch_arxiv_papers(query, max_results)
-
-        # Step 2 — enrich with Semantic Scholar
         papers = enrich_with_semantic_scholar(papers)
 
     if dry_run:
@@ -38,7 +32,7 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
             logger.info(f"  {p['arxiv_id']} | {p['title'][:60]} | citations: {p['citation_count']}")
         return
 
-    # Step 3 — save each paper as raw JSON (unchanged from Milestone 1)
+    # Step 3 — save each paper as raw JSON
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     saved = 0
@@ -46,14 +40,12 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
         safe_id = paper["arxiv_id"].replace("/", "_")
         output_path = RAW_DATA_DIR / f"{safe_id}.json"
 
-        # Extra guard: skip if the ID contains any parent directory traversal tokens
         if ".." in paper["arxiv_id"] or ".." in safe_id:
-            print(f"WARNING: Suspicious ID detected (contains '..'): {paper['arxiv_id']}, skipping")
+            logger.warning(f"Suspicious ID detected (contains '..'): {paper['arxiv_id']}, skipping")
             continue
 
-        # Verify the resolved path stays inside RAW_DATA_DIR
         if not output_path.resolve().is_relative_to(RAW_DATA_DIR.resolve()):
-            print(f"WARNING: Unsafe path detected for ID {paper['arxiv_id']}, skipping")
+            logger.warning(f"Unsafe path detected for ID {paper['arxiv_id']}, skipping")
             continue
 
         if output_path.exists():
@@ -68,23 +60,28 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
     # Step 4 — extract PDF text and chunk each paper
     logger.info("Starting PDF extraction and chunking...")
 
+    CHUNKS_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     chunked = 0
     for paper in papers:
         safe_id = paper["arxiv_id"].replace("/", "_")
         chunk_path = CHUNKS_DATA_DIR / f"{safe_id}.json"
 
-        # Skip if chunks already exist for this paper
+        # Same path traversal guards as the raw-save step
+        if ".." in paper["arxiv_id"] or ".." in safe_id:
+            logger.warning(f"Suspicious ID detected (contains '..'): {paper['arxiv_id']}, skipping")
+            continue
+
+        if not chunk_path.resolve().is_relative_to(CHUNKS_DATA_DIR.resolve()):
+            logger.warning(f"Unsafe chunk path detected for ID {paper['arxiv_id']}, skipping")
+            continue
+
         if chunk_path.exists():
             logger.info(f"[{paper['arxiv_id']}] Chunks already exist, skipping")
             continue
 
-        # Extract full text from PDF — returns None if both URLs fail
         pdf_text = extract_pdf_text(paper)
-
-        # Chunk the paper — falls back to abstract if pdf_text is None
         chunks = chunk_paper(paper, pdf_text)
-
-        # Save chunks to data/chunks/
         save_chunks(chunks, paper["arxiv_id"], CHUNKS_DATA_DIR)
         chunked += 1
 
