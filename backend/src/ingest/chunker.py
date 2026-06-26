@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 # Lower number = higher priority = more likely to contain research gaps
 SECTION_PRIORITIES = {
     "limitations":   (1, "limitations"),
-    "future work":   (2, "future_work"),
+    "future_work":   (2, "future_work"),
     "discussion":    (2, "discussion"),
     "conclusion":    (3, "conclusion"),
     "conclusions":   (3, "conclusion"),
@@ -133,9 +133,8 @@ def _split_into_chunks(text: str) -> list[str]:
 
 def _get_priority(section_name: str) -> int:
     """Return the priority number for a section name. Body text gets lowest priority."""
-    # Normalise to lowercase with spaces so keywords match regardless of
-    # whether the section name uses underscores or spaces
-    normalised = section_name.lower().replace("_", " ")
+    # Normalise to lowercase with underscores to match SECTION_PRIORITIES keys
+    normalised = section_name.lower().replace(" ", "_")
     for keyword, (priority, _) in SECTION_PRIORITIES.items():
         if keyword in normalised:
             return priority
