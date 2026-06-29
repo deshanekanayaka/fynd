@@ -39,6 +39,8 @@ def chunk_paper(paper: dict, pdf_text: str | None) -> list[dict]:
     for section_name, section_text in sections.items():
         if not section_text.strip():
             continue
+        if section_name == "references":
+            continue
 
         priority = _get_priority(section_name)
         section_chunks = _split_into_chunks(section_text)
@@ -81,7 +83,7 @@ def _detect_sections(text: str, arxiv_id: str) -> dict[str, str]:
     # re.IGNORECASE handles "LIMITATIONS", "Limitations", "limitations"
     # re.MULTILINE makes ^ match start of each line, not just start of string
     heading_pattern = re.compile(
-        r"^(?:\d+\.?\s+)?(limitations|future work|discussion|conclusion[s]?|abstract|introduction)\s*$",
+        r"^(?:\d+\.?\s+)?(limitations|future work|discussion|conclusion[s]?|abstract|introduction|references)\s*$",
         re.IGNORECASE | re.MULTILINE
     )
 

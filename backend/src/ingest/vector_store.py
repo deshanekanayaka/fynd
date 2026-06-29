@@ -40,7 +40,7 @@ def store_chunks(chunks: list[dict], collection: chromadb.Collection) -> None:
     ids = []         # unique string ID per chunk
     embeddings = []  # the 384-number vector
     documents = []   # the raw text (returned when this chunk wins a search)
-    metadatas = []   # section, priority, paper_id — filterable later
+    metadatas = []   # section, section_priority, paper_id — filterable later
 
     for chunk in chunks:
         # Chroma requires unique IDs. We build ours from paper_id + chunk index
@@ -53,18 +53,33 @@ def store_chunks(chunks: list[dict], collection: chromadb.Collection) -> None:
         metadatas.append({
             "paper_id": chunk["paper_id"],
             "section": chunk["section"],
-            "priority": chunk["section_priority"],
-            "arxiv_id":  chunk["paper_id"],
+            "section_priority": chunk["section_priority"],
         })
 
-    # upsert instead of add — safe to run the pipeline multiple times.
-    # If a chunk ID already exists, it updates rather than throwing a duplicate error.
-    collection.upsert(
-        ids=ids,
-        embeddings=embeddings,
-        documents=documents,
-        metadatas=metadatas,
-    )
+    # Chroma has a max batch size of 5461 — upsert in batches to stay under it.
+    # If any batch fails, roll back all previously upserted IDs so Chroma
+    # stays clean and the next pipeline run can retry from scratch.
+    BATCH_SIZE = 5000
+    upserted_ids: list[str] = []
+
+    try:
+        for i in range(0, len(ids), BATCH_SIZE):
+            batch_ids = ids[i:i + BATCH_SIZE]
+            collection.upsert(
+                ids=batch_ids,
+                embeddings=embeddings[i:i + BATCH_SIZE],
+                documents=documents[i:i + BATCH_SIZE],
+                metadatas=metadatas[i:i + BATCH_SIZE],
+            )
+            upserted_ids.extend(batch_ids)
+            logger.info(f"Upserted batch {i // BATCH_SIZE + 1} ({min(i + BATCH_SIZE, len(ids))}/{len(ids)} chunks)")
+
+    except Exception as e:
+        logger.error(f"Batch upsert failed: {e}. Rolling back {len(upserted_ids)} upserted chunks.")
+        if upserted_ids:
+            collection.delete(ids=upserted_ids)
+            logger.info(f"Rollback complete — {len(upserted_ids)} chunks removed from Chroma.")
+        raise
 
     logger.info(f"Stored {len(chunks)} chunks in Chroma.")
 

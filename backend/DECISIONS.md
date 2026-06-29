@@ -54,3 +54,16 @@ is addressed. Metadata filtering on `section='limitations'` returns zero results
 limitation language ("we did not address", "a limitation of", "future work could")
 and promotes those chunks to `section_priority=1` regardless of their heading label.
 This is a Milestone 2 improvement deferred to a later iteration.
+
+### OBS-002: Metadata key inconsistency between chunker and vector store
+
+**Finding:** Chunks on disk stored `section_priority` as the key. The embedder
+renamed it to `priority` when writing metadata to Chroma. Query code looked for
+`section_priority` and returned `unknown` for every result.
+
+**Fix:** Standardised to `section_priority` in `vector_store.py`. Removed the
+duplicate `arxiv_id` field from Chroma metadata. Re-embedded all chunks.
+
+**Fix:** Added `references` to the heading detection regex in `chunker.py` and
+skip references sections in `chunk_paper`. Partially addresses reference noise
+in results — papers without an explicit References heading are not yet handled.
