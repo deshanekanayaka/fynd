@@ -90,7 +90,10 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
         if chunk_path.exists():
             logger.info(f"[{paper['arxiv_id']}] Chunks already exist, skipping chunking")
             # Load into all_chunks for reference but do NOT add to new_chunks
-            # — these are already stored in Chroma from a previous run
+            # — these are already stored in Chroma from a previous run.
+            # NOTE: if Chroma metadata schema changes (e.g. key renames), you must
+            # wipe data/chroma manually and re-run the pipeline to backfill all records.
+            # Existing chunk files will not be re-embedded automatically.
             with open(chunk_path) as f:
                 all_chunks.extend(json.load(f))
             continue

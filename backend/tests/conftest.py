@@ -1,6 +1,5 @@
 import sys
 import types
-from contextlib import contextmanager
 from pathlib import Path
 import pytest
 
@@ -25,16 +24,40 @@ def _ensure_module(name: str, attrs: dict | None = None):
     sys.modules[name] = mod
     return mod
 
-# Dummy tqdm with passthrough tqdm() and a logging_redirect_tqdm context manager
-_tqdm = _ensure_module("tqdm", {"tqdm": lambda it, **kw: it})
-_tqdm_contrib = _ensure_module("tqdm.contrib")
-@contextmanager
-def _logging_redirect_tqdm():
-    yield
-_tqdm_logging = _ensure_module("tqdm.contrib.logging", {"logging_redirect_tqdm": _logging_redirect_tqdm})
+# Dummy sentence_transformers — tests don't test embedding, so stub the whole module.
+# We can't stub tqdm because sentence_transformers and huggingface_hub subclass it
+# internally — the real tqdm package is installed and handles its own imports.
+class _DummySentenceTransformer:
+    def __init__(self, *a, **k):
+        pass
+    def encode(self, texts, **k):
+        if isinstance(texts, str):
+            return [0.0] * 384
+        return [[0.0] * 384 for _ in texts]
+
+_ensure_module("sentence_transformers", {"SentenceTransformer": _DummySentenceTransformer})
 
 # Dummy dotenv
-_ensure_module("dotenv", {"load_dotenv": lambda *a, **k: None})
+_ensure_module("dotenv", {
+    "load_dotenv": lambda *a, **k: None,
+    "dotenv_values": lambda *a, **k: {},
+})
+
+# Dummy chromadb — tests don't test vector storage
+class _DummyCollection:
+    def upsert(self, *a, **k): pass
+    def query(self, *a, **k): return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+    def count(self): return 0
+    def peek(self, *a, **k): return {"documents": [], "metadatas": []}
+
+class _DummyChromaClient:
+    def get_or_create_collection(self, *a, **k): return _DummyCollection()
+    def get_collection(self, *a, **k): return _DummyCollection()
+
+_chromadb_mod = _ensure_module("chromadb")
+_chromadb_mod.PersistentClient = lambda *a, **k: _DummyChromaClient()
+_chromadb_mod.Collection = _DummyCollection
+_ensure_module("chromadb.api", {"Collection": _DummyCollection})
 
 # Dummy semanticscholar client
 class _DummyS2:
@@ -42,15 +65,18 @@ class _DummyS2:
         pass
     def get_paper(self, *a, **k):
         return None
+
 _ensure_module("semanticscholar", {"SemanticScholar": _DummyS2})
 
 # Minimal arxiv module so import works; tests will monkeypatch its classes
 class _DummyClient:
     def results(self, search):
         return []
+
 class _DummySearch:
     def __init__(self, *a, **k):
         pass
+
 _ensure_module("arxiv", {"Client": _DummyClient, "Search": _DummySearch, "SortCriterion": types.SimpleNamespace(Relevance=0)})
 
 
@@ -99,7 +125,6 @@ def mock_arxiv(monkeypatch, fake_arxiv_result_factory):
     """Mock arxiv.Client().results(...) to yield our fake results."""
     class FakeClient:
         def results(self, search):
-            # Yield is controlled per-test by setting attribute on this class
             yield from self._results
 
     fake_client = FakeClient()
@@ -111,15 +136,12 @@ def mock_arxiv(monkeypatch, fake_arxiv_result_factory):
     import arxiv
     monkeypatch.setattr(arxiv, "Client", fake_client_ctor)
 
-    # Also patch arxiv.Search to a simple holder so constructing it doesn't fail
     class Search:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
 
     monkeypatch.setattr(arxiv, "Search", Search)
-
-    # Ensure SortCriterion.Relevance exists as used in code
     arxiv.SortCriterion = types.SimpleNamespace(Relevance=0)
 
     return fake_client, fake_arxiv_result_factory
