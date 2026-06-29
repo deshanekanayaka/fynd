@@ -1,23 +1,34 @@
+# backend/src/ingest/pipeline.py
+
 import json
 import logging
 import argparse
+import sys
 from pathlib import Path
 from tqdm.contrib.logging import logging_redirect_tqdm
+
+# Ensure project root (backend/) is on sys.path so `config.py` is importable
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # /.../backend
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from fetch_papers import fetch_arxiv_papers, enrich_with_semantic_scholar
 from pdf_extractor import extract_pdf_text
 from chunker import chunk_paper, save_chunks
+from embedder import load_model, embed_chunks
+from vector_store import get_collection, store_chunks
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-RAW_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
-CHUNKS_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "chunks"
+RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
+CHUNKS_DATA_DIR = PROJECT_ROOT / "data" / "chunks"
 
 
 def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> None:
     """
     Full ingestion pipeline:
-    fetch → enrich → save raw → extract PDF → chunk → save chunks
+    fetch → enrich → save raw → extract PDF → chunk → save chunks → embed → store
     dry_run=True logs what would happen without writing any files.
     """
     logger.info(f"Starting ingestion: query='{query}', max_results={max_results}")
@@ -62,12 +73,13 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
 
     CHUNKS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+    all_chunks = []  # accumulates chunks from every paper for Step 5
     chunked = 0
+
     for paper in papers:
         safe_id = paper["arxiv_id"].replace("/", "_")
         chunk_path = CHUNKS_DATA_DIR / f"{safe_id}.json"
 
-        # Same path traversal guards as the raw-save step
         if ".." in paper["arxiv_id"] or ".." in safe_id:
             logger.warning(f"Suspicious ID detected (contains '..'): {paper['arxiv_id']}, skipping")
             continue
@@ -77,15 +89,33 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
             continue
 
         if chunk_path.exists():
-            logger.info(f"[{paper['arxiv_id']}] Chunks already exist, skipping")
+            logger.info(f"[{paper['arxiv_id']}] Chunks already exist, skipping chunking")
+            # Load existing chunks so they still get embedded in Step 5
+            with open(chunk_path) as f:
+                all_chunks.extend(json.load(f))
             continue
 
         pdf_text = extract_pdf_text(paper)
         chunks = chunk_paper(paper, pdf_text)
         save_chunks(chunks, paper["arxiv_id"], CHUNKS_DATA_DIR)
+        all_chunks.extend(chunks)
         chunked += 1
 
     logger.info(f"Chunked {chunked} new papers to {CHUNKS_DATA_DIR}")
+
+    # Step 5 — embed all chunks and store in Chroma
+    if not all_chunks:
+        logger.warning("No chunks to embed — skipping Step 5")
+        return
+
+    logger.info(f"Embedding {len(all_chunks)} chunks...")
+    model = load_model()
+    embedded_chunks = embed_chunks(all_chunks, model)
+
+    collection = get_collection()
+    store_chunks(embedded_chunks, collection)
+
+    logger.info(f"Pipeline complete — {len(embedded_chunks)} chunks embedded and stored in Chroma")
 
 
 if __name__ == "__main__":

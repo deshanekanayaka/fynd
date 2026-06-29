@@ -19,3 +19,6 @@ CITATION_THRESHOLD = 0.90
 # --- Ingestion ---
 ARXIV_MAX_RESULTS = 100
 SECTION_PRIORITY = ["limitations", "future work", "conclusion", "abstract"]
+
+CHROMA_PATH = "data/chroma"           # where Chroma writes its files on disk
+CHROMA_COLLECTION_NAME = "fynd_chunks"
