@@ -1,3 +1,5 @@
+from pathlib import Path
+
 # --- Chunking ---
 CHUNK_SIZE = 512          # Max characters per chunk
 CHUNK_OVERLAP = 50        # Characters shared between adjacent chunks
@@ -20,5 +22,5 @@ CITATION_THRESHOLD = 0.90
 ARXIV_MAX_RESULTS = 100
 SECTION_PRIORITY = ["limitations", "future work", "conclusion", "abstract"]
 
-CHROMA_PATH = "data/chroma"           # where Chroma writes its files on disk
+CHROMA_PATH = str(Path(__file__).resolve().parent / "data" / "chroma")
 CHROMA_COLLECTION_NAME = "fynd_chunks"

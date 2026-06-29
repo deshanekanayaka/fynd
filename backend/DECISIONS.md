@@ -33,3 +33,24 @@ between ingestion and search.
 time. Making that explicit in code means the model is a visible, swappable config
 value rather than a hidden Chroma default. Switching embedding models later is a
 one-line change in `config.py`.
+
+## Observations
+
+### OBS-001: Limitations sections absent in current corpus
+
+**Finding:** After ingesting 40 papers across federated learning and RAG domains,
+zero chunks were labelled `limitations` or `future_work` by the chunker. However,
+149 chunks contain the words "limitation" or "future work" inline — labelled as
+`introduction`, `body`, or `conclusions`.
+
+**Cause:** ArXiv papers rarely use a standalone "Limitations" heading. Authors
+embed limitation discussions within other sections, particularly conclusions and
+introductions. The chunker's regex only detects explicit headings.
+
+**Impact:** The 1.5x section boost in Milestone 6 will have no effect until this
+is addressed. Metadata filtering on `section='limitations'` returns zero results.
+
+**Future fix:** Extend the chunker with a sentence-level classifier that detects
+limitation language ("we did not address", "a limitation of", "future work could")
+and promotes those chunks to `section_priority=1` regardless of their heading label.
+This is a Milestone 2 improvement deferred to a later iteration.

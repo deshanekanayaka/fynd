@@ -1,5 +1,3 @@
-# backend/src/ingest/pipeline.py
-
 import json
 import logging
 import argparse
@@ -73,7 +71,8 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
 
     CHUNKS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    all_chunks = []  # accumulates chunks from every paper for Step 5
+    all_chunks = []   # everything — existing + new, for future use
+    new_chunks = []   # only freshly chunked papers — these need embedding
     chunked = 0
 
     for paper in papers:
@@ -90,7 +89,8 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
 
         if chunk_path.exists():
             logger.info(f"[{paper['arxiv_id']}] Chunks already exist, skipping chunking")
-            # Load existing chunks so they still get embedded in Step 5
+            # Load into all_chunks for reference but do NOT add to new_chunks
+            # — these are already stored in Chroma from a previous run
             with open(chunk_path) as f:
                 all_chunks.extend(json.load(f))
             continue
@@ -99,23 +99,24 @@ def run_ingestion(query: str, max_results: int = 20, dry_run: bool = False) -> N
         chunks = chunk_paper(paper, pdf_text)
         save_chunks(chunks, paper["arxiv_id"], CHUNKS_DATA_DIR)
         all_chunks.extend(chunks)
+        new_chunks.extend(chunks)  # only new chunks go to the embedder
         chunked += 1
 
     logger.info(f"Chunked {chunked} new papers to {CHUNKS_DATA_DIR}")
 
-    # Step 5 — embed all chunks and store in Chroma
-    if not all_chunks:
-        logger.warning("No chunks to embed — skipping Step 5")
+    # Step 5 — embed and store only new chunks
+    if not new_chunks:
+        logger.info("No new chunks to embed — Chroma already up to date")
         return
 
-    logger.info(f"Embedding {len(all_chunks)} chunks...")
+    logger.info(f"Embedding {len(new_chunks)} new chunks...")
     model = load_model()
-    embedded_chunks = embed_chunks(all_chunks, model)
+    embedded_chunks = embed_chunks(new_chunks, model)
 
     collection = get_collection()
     store_chunks(embedded_chunks, collection)
 
-    logger.info(f"Pipeline complete — {len(embedded_chunks)} chunks embedded and stored in Chroma")
+    logger.info(f"Pipeline complete — {len(embedded_chunks)} new chunks embedded and stored in Chroma")
 
 
 if __name__ == "__main__":
