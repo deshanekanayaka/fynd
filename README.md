@@ -1,9 +1,9 @@
 # Fynd
 
-Identify genuine research gaps in academic literature — not summaries, not vague
+Identify genuine research gaps in academic literature, not summaries, not vague
 "further research needed", but specific, cited, actionable gaps for your final year project.
 
-🔗 **[Live demo](https://fynd.vercel.app)** 
+<!-- Live demo: https://fynd.vercel.app -->
 
 ---
 
@@ -11,7 +11,7 @@ Identify genuine research gaps in academic literature — not summaries, not vag
 
 Fynd pulls papers from ArXiv and Semantic Scholar, processes them through a
 multi-stage RAG pipeline, and produces a structured research brief answering:
-**"What hasn't been studied yet — and where should I focus?"**
+**"What hasn't been studied yet, and where should I focus?"**
 
 Every gap is tied to a real paper, a real section, and a verifiable claim.
 No hallucinated summaries.
@@ -100,8 +100,8 @@ uvicorn src.api.main:app --reload --port 8000
 
 ## Eval thresholds
 
-Every push to `main` runs the RAGAs evaluation pipeline. Build fails if any metric
-drops below threshold.
+Every push to `main` will run the RAGAs evaluation pipeline (planned). Build will
+fail if any metric drops below threshold.
 
 | Metric | Threshold | What it measures |
 |---|---|---|
@@ -139,15 +139,9 @@ hard way.
 
 ## What I learned building this
 
-- **Hybrid retrieval is non-negotiable.** BM25 catches exact technical terms
-  ("LoRA", "FAISS") that vector search misses. Vector search catches paraphrased
-  concepts that BM25 misses. Neither alone is sufficient.
 - **Section-aware chunking changes retrieval quality fundamentally.** Research gaps
-  live in Limitations and Future Work sections — naive character chunking buries them
-  equally with the introduction.
-- **Citation enforcement belongs in code, not prompts.** Telling an LLM to cite its
-  sources is unreliable. Tracking chunk IDs through the pipeline and verifying them
-  against output is not.
+  live in Limitations and Future Work sections, so naive character chunking buries
+  them equally with the introduction.
 - **Evaluation is harder than building.** Faithfulness and answer relevance are
   different things. A grounded response can still be irrelevant. Measuring both
   separately is what makes the eval pipeline meaningful.
