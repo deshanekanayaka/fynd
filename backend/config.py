@@ -20,7 +20,18 @@ CITATION_THRESHOLD = 0.90
 
 # --- Ingestion ---
 ARXIV_MAX_RESULTS = 100
-SECTION_PRIORITY = ["limitations", "future work", "conclusion", "abstract"]
+
+# Maps section heading keywords to a priority number and canonical name
+# Lower number = higher priority = more likely to contain research gaps
+SECTION_PRIORITIES = {
+    "limitations":   (1, "limitations"),
+    "future_work":   (2, "future_work"),
+    "discussion":    (2, "discussion"),
+    "conclusion":    (3, "conclusion"),
+    "conclusions":   (3, "conclusion"),
+    "abstract":      (4, "abstract"),
+    "introduction":  (5, "introduction"),
+}
 
 CHROMA_PATH = str(Path(__file__).resolve().parent / "data" / "chroma")
 CHROMA_COLLECTION_NAME = "fynd_chunks"

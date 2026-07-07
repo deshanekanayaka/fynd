@@ -5,16 +5,14 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Environment secrets — never commit these
+# Environment secrets — never commit
 backend/.env
 
 # ML artifacts — too large for git
 backend/data/
-backend/chroma_db/
 *.model
 backend/models/
 
-# OS
-.DS_Store.idea/
+# OS / IDE
 .DS_Store
 .idea/
