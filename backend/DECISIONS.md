@@ -34,6 +34,23 @@ time. Making that explicit in code means the model is a visible, swappable confi
 value rather than a hidden Chroma default. Switching embedding models later is a
 one-line change in `config.py`.
 
+## ADR-003: BM25 reads data/chunks/*.json, not Chroma
+
+**Problem:** BM25 retrieval needs access to the same chunk corpus as vector search.
+Chroma already stores every chunk, so it's tempting to read chunk text and metadata
+back out of Chroma for BM25 too.
+
+**Options considered:**
+- Read chunk text and metadata out of Chroma for BM25 as well
+- Read `data/chunks/*.json` directly for BM25, independent of Chroma
+
+**Decision:** BM25 reads `data/chunks/*.json` directly.
+
+**Why:** Chroma is the vector store's storage, not a shared chunk database. Reading
+JSON keeps each retrieval method independent and testable in isolation. Chunk-count
+and metadata parity (5,887 chunks both sides) was verified by diagnostic before
+locking this in.
+
 ## Observations
 
 ### OBS-001: Limitations sections absent in current corpus

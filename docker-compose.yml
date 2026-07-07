@@ -6,7 +6,8 @@ services:
     env_file:
       - ./backend/.env
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
+  # uncomment at Milestone 9
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:3000"

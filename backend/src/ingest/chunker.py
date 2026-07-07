@@ -3,22 +3,9 @@ import logging
 import re
 from pathlib import Path
 
+from config import CHUNK_OVERLAP, CHUNK_SIZE, SECTION_PRIORITIES
+
 logger = logging.getLogger(__name__)
-
-# Maps section heading keywords to a priority number and canonical name
-# Lower number = higher priority = more likely to contain research gaps
-SECTION_PRIORITIES = {
-    "limitations":   (1, "limitations"),
-    "future_work":   (2, "future_work"),
-    "discussion":    (2, "discussion"),
-    "conclusion":    (3, "conclusion"),
-    "conclusions":   (3, "conclusion"),
-    "abstract":      (4, "abstract"),
-    "introduction":  (5, "introduction"),
-}
-
-CHUNK_SIZE = 512      # Target character count per chunk
-CHUNK_OVERLAP = 50    # Characters repeated between consecutive chunks
 
 
 def chunk_paper(paper: dict, pdf_text: str | None) -> list[dict]:
