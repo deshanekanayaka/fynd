@@ -1,4 +1,11 @@
-# Architecture Decision Records
+# Implementation notes from the first version
+
+These records come from the first version of Fynd, when this file was
+`backend/DECISIONS.md`. They are implementation notes about PDF extraction,
+chunking, and the Chroma vector store, and they are kept because the findings are
+still true. Design decisions for the current version live in `docs/adr/`.
+
+OBS-001 below is the one that changes the current design. See `docs/design/big-picture.md`.
 
 ## ADR-001: PDF word extraction tolerance
 

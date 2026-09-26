@@ -16,3 +16,7 @@ backend/models/
 # OS / IDE
 .DS_Store
 .idea/
+
+# Scratch issue tracker
+.scratch/*
+!.scratch/.gitkeep
