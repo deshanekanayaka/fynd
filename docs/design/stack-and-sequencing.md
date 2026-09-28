@@ -67,14 +67,19 @@ orchestration exists.
 Collect a small Snapshot, extract Author-Stated Open Problems, hand-label ten Verdicts, run
 the judge, compare. Plain Python, no framework. Then a written go or no-go.
 
-Reuse from the first version: `backend/src/ingest/fetch_papers.py`,
-`pdf_extractor.py`, and `chunker.py`, with their tests. Extraction must work at the sentence
-level rather than by heading, because OBS-001 in `docs/v1-implementation-notes.md` shows that
-explicit Limitations and Future Work headings are almost absent from arXiv papers.
+The ingestion code from the first version is rewritten, not reused. The plan and the
+tickets are in `.scratch/ingestion-rewrite/`. The rewrite has four parts: fetch papers by
+date range, extract PDF text, split the text into sentences, and a pipeline that connects
+them. The Snapshot is stored as local files for Phase 0.
 
-Replaced in later phases: `embedder.py` and `vector_store.py` target Chroma, and the current
-design uses Postgres with pgvector instead. They stay in the repository until Phase 1 needs
-the change.
+Extraction works at the sentence level rather than by heading. OBS-001 in
+`docs/v1-implementation-notes.md` shows that arXiv papers almost never have Limitations or
+Future Work headings.
+
+The rewrite removes the Semantic Scholar citation counts, because today's count is a Leak in
+a Backtest. It also removes the Chroma embedder and vector store. Phase 1 adds citation links
+as of the cutoff date, and embeddings in Postgres with pgvector. The old code is in git history
+before the branch `rewrite/ingestion`.
 
 **Phase 1, the Refutation engine.** Retrieval tuned and measured for recall of the solving
 paper, separately from judge accuracy. The two-stage judge, with the pre-filter's recall
