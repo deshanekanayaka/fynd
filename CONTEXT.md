@@ -39,6 +39,11 @@ The set of papers collected for one Seeded Domain, gathered once. Its collection
 printed on every Research Brief, because an Untouched Verdict is only true as of that date.
 _Avoid_: Corpus, index, dataset
 
+**Paper Text**:
+The readable prose of one paper, with the reference list dropped. It is what Refutation and
+problem extraction read, because an abstract never states a limitation in enough detail.
+_Avoid_: Full text, body, content
+
 **Prior Work**:
 The specific published work an Angle differs from. Named with a citation. An Angle with no
 Prior Work named is discarded.

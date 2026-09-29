@@ -1,0 +1,79 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 431 >>
+stream
+BT /F1 11 Tf 14 TL 72 700 Td
+(A Small Paper About Federated Learning Systems) Tj T*
+(This paper studies the behaviour of feder-) Tj T*
+(ated learning under a network that drops a) Tj T*
+(large share of the client updates it carries.) Tj T*
+(We report one result.) Tj T*
+(Our method does not yet handle clients that) Tj T*
+(leave in the middle of a training round, and) Tj T*
+(that is the obvious next step for this work.) Tj T*
+ET
+
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 308 >>
+stream
+BT /F1 11 Tf 14 TL 60 700 Td
+(The left column opens the section and) Tj T*
+(runs for several lines before it stops.) Tj T*
+(It closes here.) Tj T*
+ET
+BT /F1 11 Tf 14 TL 330 700 Td
+(The right column carries the rest of the) Tj T*
+(same section and finishes the page off.) Tj T*
+(It closes here too.) Tj T*
+ET
+
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 167 >>
+stream
+BT /F1 11 Tf 14 TL 72 700 Td
+(References) Tj T*
+(Smith, J. 2020. Another paper. Journal of Things.) Tj T*
+(Jones, A. 2019. A third paper. Journal of Things.) Tj T*
+ET
+
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000323 00000 n 
+0000000805 00000 n 
+0000000931 00000 n 
+0000001290 00000 n 
+0000001416 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1634
+%%EOF
