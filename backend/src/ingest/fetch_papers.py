@@ -112,5 +112,7 @@ def fetch_papers(
     if dropped:
         print(f"Dropped {dropped} papers that arXiv returned outside the window")
     if len(papers) == max_results:
-        print(f"Hit the limit of {max_results}. The window holds more papers than this.")
+        print(
+            f"Hit the limit of {max_results}. The window holds more papers than this."
+        )
     return papers
