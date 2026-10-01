@@ -107,3 +107,20 @@ def test_raises_when_there_are_no_sentences():
     # Empty output read as a paper is a false Untouched Verdict later on.
     with pytest.raises(ValueError, match="no sentences"):
         split_sentences("   \n\n   ")
+
+
+def test_splits_after_a_question_that_ends_in_a_variable():
+    # "x" is one letter, so the initial rule used to swallow the question mark and join
+    # the question to its answer. Only a period is ambiguous.
+    sentences = split_sentences("What is the value of x? We show that it is small.")
+
+    assert sentences == ["What is the value of x?", "We show that it is small."]
+
+
+def test_keeps_a_heading_apart_from_the_paragraph_below_it():
+    # A heading ends with no mark, so it looks unfinished. It is not joined, because the
+    # next block starts with a capital. This is the rule that makes an uppercase
+    # continuation across a page break stay split, and it is the safer trade.
+    sentences = split_sentences("I. INTRODUCTION\n\nFederated learning trains a model.")
+
+    assert sentences == ["I. INTRODUCTION", "Federated learning trains a model."]

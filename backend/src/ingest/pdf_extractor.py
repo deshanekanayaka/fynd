@@ -62,23 +62,44 @@ REFERENCES_HEADING = re.compile(
 # than silently blocked.
 HEADERS = {"User-Agent": "fynd/0.1"}
 
+# A paper PDF is a few megabytes, and a long survey with figures reaches about twenty.
+# Eighty is far past any real paper, so this stops a redirect or a broken mirror from
+# filling memory with a reply we never asked for.
+MAX_BYTES = 80 * 1024 * 1024
+
+# How many bytes to take from the connection at a time.
+CHUNK_BYTES = 64 * 1024
+
 
 def _download(pdf_url: str) -> bytes:
     """Fetch the bytes of one PDF. Raises ValueError when they are not a PDF."""
 
-    response = requests.get(pdf_url, timeout=TIMEOUT_SECONDS, headers=HEADERS)
+    # stream=True holds the body back, so the size test runs while the bytes arrive
+    # instead of after all of them already sit in memory. The `with` closes the
+    # connection on the way out, including when a check inside it raises.
+    with requests.get(
+        pdf_url, timeout=TIMEOUT_SECONDS, headers=HEADERS, stream=True
+    ) as response:
+        # Raise rather than return None. A caller can ignore None by accident, and a
+        # paper that silently became empty text is a false Untouched Verdict later on.
+        if response.status_code != 200:
+            raise ValueError(f"{pdf_url} returned status {response.status_code}")
 
-    # Raise rather than return None. A caller can ignore None by accident, and a paper
-    # that silently became empty text is a false Untouched Verdict later on.
-    if response.status_code != 200:
-        raise ValueError(f"{pdf_url} returned status {response.status_code}")
+        # Count the bytes we actually read. A Content-Length header is a claim by the
+        # server, and a limit that trusted the claim would let a server that sends more
+        # than it promised walk straight past the limit.
+        data = bytearray()
+        for chunk in response.iter_content(CHUNK_BYTES):
+            data.extend(chunk)
+            if len(data) > MAX_BYTES:
+                raise ValueError(f"{pdf_url} is larger than {MAX_BYTES} bytes")
 
     # Trust the bytes, not the Content-Type header. An arXiv error page or a rate limit
     # page can still be served with a PDF content type.
-    if not response.content.startswith(b"%PDF"):
+    if not data.startswith(b"%PDF"):
         raise ValueError(f"{pdf_url} did not return a PDF")
 
-    return response.content
+    return bytes(data)
 
 
 def _paragraphs(page_text: str) -> str:

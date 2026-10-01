@@ -23,17 +23,33 @@ SAMPLE = Path(__file__).parent / "fixtures" / "sample_paper.pdf"
 
 
 class FakeResponse:
-    """Stands in for the object requests.get returns."""
+    """Stands in for the object requests.get returns.
+
+    _download reads the body in chunks and closes the response, so the fake has to be
+    a context manager with an iter_content method, the same as the real one.
+    """
 
     def __init__(self, status_code, content):
         self.status_code = status_code
         self.content = content
+        self.closed = False
+
+    def iter_content(self, chunk_size):
+        for start in range(0, len(self.content), chunk_size):
+            yield self.content[start : start + chunk_size]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.closed = True
+        return False
 
 
 def fake_get(response):
     """Build a replacement for requests.get that always returns `response`."""
 
-    def get(url, timeout=None, headers=None):
+    def get(url, timeout=None, headers=None, stream=False):
         return response
 
     return get
@@ -140,3 +156,17 @@ def test_raises_when_the_pdf_holds_no_text(monkeypatch):
 
     with pytest.raises(ValueError, match="produced no text"):
         extract_paper_text("https://example.test/scan.pdf")
+
+
+def test_stops_a_body_larger_than_the_limit(monkeypatch):
+    """The size test runs on the bytes read, not on a Content-Length header."""
+
+    monkeypatch.setattr(pdf_extractor, "MAX_BYTES", 1024)
+    too_big = FakeResponse(200, b"%PDF-1.4" + b"x" * 2048)
+    monkeypatch.setattr(pdf_extractor.requests, "get", fake_get(too_big))
+
+    with pytest.raises(ValueError, match="larger than"):
+        pdf_extractor.extract_paper_text("https://arxiv.org/pdf/0000.00000v1")
+
+    # The connection closes even though a check inside the `with` raised.
+    assert too_big.closed

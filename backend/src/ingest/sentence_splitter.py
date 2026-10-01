@@ -50,6 +50,13 @@ def _ends_a_sentence(head: str) -> bool:
     if not words:
         return True
 
+    # Only a period is ambiguous. A question mark or an exclamation mark ends a
+    # sentence whatever word it follows, so the two rules below are about periods
+    # alone. Without this, "the value of x? We show" reads "x" as an initial and the
+    # question joins the answer.
+    if not words[-1].rstrip(CLOSERS).endswith("."):
+        return True
+
     # Take the last word bare: no brackets or quotes around it, no marks after it. So
     # "(e.g." becomes "e.g", and 'this."' becomes "this".
     word = words[-1].lstrip("(\"'[").rstrip(".?!" + CLOSERS)

@@ -161,3 +161,34 @@ def test_fetch_gets_the_arguments_it_was_given(tmp_path):
         "end": "2021-12-31",
         "max_results": 7,
     }
+
+
+def test_a_forced_run_that_fails_keeps_the_older_files(tmp_path, capsys):
+    """Deleting them would lose a good paper to one timeout, so they stay and are named."""
+
+    common = dict(
+        out_dir=tmp_path, fetch=fake_fetch, extract=fake_extract, split=fake_split
+    )
+    run_pipeline("Federated Learning", "2015-01-01", "2021-12-31", **common)
+
+    def extract_that_always_fails(pdf_url):
+        raise ValueError("a timeout")
+
+    counts = run_pipeline(
+        "Federated Learning",
+        "2015-01-01",
+        "2021-12-31",
+        force=True,
+        out_dir=tmp_path,
+        fetch=fake_fetch,
+        extract=extract_that_always_fails,
+        split=fake_split,
+    )
+
+    assert counts["failed"] == 2
+    assert counts["saved"] == 0
+    # The files from the first run are still there and still readable.
+    paper_dir = tmp_path / "federated-learning" / "1602.05629"
+    assert (paper_dir / "text.txt").read_text() == "One sentence. Two sentences."
+    # And the run said so, so the age is not silent.
+    assert "kept the older files" in capsys.readouterr().out

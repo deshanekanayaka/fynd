@@ -117,6 +117,12 @@ def run_pipeline(
         except Exception as error:
             print(f"FAILED {record['arxiv_id']}: {error}")
             failed += 1
+            # Under --force the paper can already hold files from an earlier run, and
+            # they are now older than the code that made them. We keep them, because
+            # deleting them would lose a good paper to one timeout. A later run without
+            # --force skips this directory, so the age has to be said out loud here.
+            if _is_done(paper_dir):
+                print(f"  kept the older files in {paper_dir}. Rerun with --force.")
             continue
 
         full_record = dict(record)
