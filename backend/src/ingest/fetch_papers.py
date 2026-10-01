@@ -1,91 +1,118 @@
+"""Step 01 of ingestion: ask arXiv for papers inside a date range.
+
+Fynd compares a paper against later work across a cutoff date. So papers can never
+arrive as one undated pile. The caller runs this twice: once ending at the cutoff, for
+the papers that state open problems, and once starting at the cutoff, for the later
+papers Refutation searches. The date range is the whole point of this step.
+"""
+
 import re
-from tqdm import tqdm
+from datetime import datetime
+
 import arxiv
-import time
-import logging
-from semanticscholar import SemanticScholar
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
+PDF_BASE = "https://arxiv.org/pdf"
 
-# Set up logging so we can see what's happening when the script runs.
-# AI pipelines fail silently without this — you need to know which paper failed and why.
-logger = logging.getLogger(__name__)
-
-# Initialise the Semantic Scholar client once, at module level.
-# Passing the API key gives us a higher rate limit than anonymous requests.
-sch = SemanticScholar(api_key=os.getenv("SEMANTIC_SCHOLAR_API_KEY"))
+# One client for the whole program. The library waits 3 seconds between requests, and it
+# counts that wait per client. A fresh client each call forgets the wait, and two calls
+# back to back then break the arXiv request policy.
+_CLIENT = arxiv.Client()
 
 
-def fetch_arxiv_papers(query: str, max_results: int = 20) -> list[dict]:
+def _to_record(result) -> dict:
+    """Turn one arXiv search result into a Paper Record (a plain dict)."""
+
+    # result.entry_id looks like "http://arxiv.org/abs/2005.05265v2".
+    # Take the part after "/abs/", then drop the trailing version.
+    after_abs = result.entry_id.split("/abs/")[-1]
+    raw_id = re.sub(r"v\d+$", "", after_abs)
+
+    # Old ids such as "cs/0612045" contain a slash, which would make a directory
+    # if we used it as a file name. So we keep two forms: one safe, one original.
+    arxiv_id = raw_id.replace("/", "_")
+
+    # Always v1. We never copy result.pdf_url, because that points at the newest
+    # version, which can mention work published after the cutoff. That is a Leak.
+    pdf_url = f"{PDF_BASE}/{raw_id}v1"
+
+    return {
+        "arxiv_id": arxiv_id,
+        "raw_id": raw_id,
+        "version": "v1",
+        "pdf_url": pdf_url,
+        "title": result.title,
+        # result.authors holds Author objects, so we pull the name out of each one.
+        "authors": [author.name for author in result.authors],
+        "abstract": result.summary,
+        # result.published is the FIRST submission date. result.updated is the date of
+        # the newest version, and we drop it, because a v2 date can sit after the cutoff.
+        "published": result.published.isoformat(),
+        "primary_category": result.primary_category,
+    }
+
+
+def fetch_papers(
+    phrase: str,
+    start: str,
+    end: str,
+    max_results: int = 50,
+    client=None,
+) -> list[dict]:
+    """Search arXiv abstracts for `phrase`, between the days `start` and `end`.
+
+    Dates are plain strings such as "2019-01-01". Both days are included in full, so a
+    2022-01-01 cutoff is written as end="2021-12-31". Returns a list of Paper Records.
+    Writes no files: ticket 04 saves the Snapshot.
     """
-    Search ArXiv and return a list of paper metadata dicts.
-    Each dict contains everything ArXiv gives us for that paper.
-    """
-    client = arxiv.Client()  # Default client — handles rate limiting and retries for us
+
+    # A quote inside the phrase would close our own quote early and silently search for
+    # something else. Better to stop than to return the wrong corpus.
+    if '"' in phrase:
+        raise ValueError("phrase must not contain a double quote")
+
+    # Parse the dates instead of trusting them. "2019-1-1" cut up by hand gives a 10
+    # character stamp where arXiv wants 12, and the date filter then fails quietly.
+    # A quiet date failure in this file is exactly how post-cutoff papers leak in.
+    start_day = datetime.strptime(start, "%Y-%m-%d").date()
+    end_day = datetime.strptime(end, "%Y-%m-%d").date()
+
+    # arXiv wants YYYYMMDDHHMM. We take the whole of the first day and the whole of the
+    # last day, so a date the caller types means the day they meant.
+    start_stamp = start_day.strftime("%Y%m%d") + "0000"
+    end_stamp = end_day.strftime("%Y%m%d") + "2359"
+
+    # No category limit on purpose: a Transfer Angle comes from another field.
+    query = f'abs:"{phrase}" AND submittedDate:[{start_stamp} TO {end_stamp}]'
 
     search = arxiv.Search(
         query=query,
         max_results=max_results,
-        sort_by=arxiv.SortCriterion.Relevance  # Most relevant papers first, not newest
+        # Relevance, not date, so 50 results are the 50 best matches in the window.
+        sort_by=arxiv.SortCriterion.Relevance,
     )
 
+    # The client is a seam: tests pass a fake one, so they never touch the network.
+    if client is None:
+        client = _CLIENT
+
     papers = []
-
+    dropped = 0
     for result in client.results(search):
-        # result.entry_id looks like "https://arxiv.org/abs/2005.11401v4"
-        # Step 1: extract everything after "/abs/" → "2005.11401v4"
-        # Step 2: strip trailing version suffix (v1, v2, etc.) with regex → "2005.11401"
-        # Step 3: replace any slashes (old-style IDs like "cs/0612045") with underscores
-        #         so the ID is safe to use as a filename
-        raw_id = result.entry_id.split("/abs/")[-1]
-        arxiv_id = re.sub(r'v\d+$', '', raw_id).replace("/", "_")
+        # Check the window ourselves as well. arXiv filters on its own submittedDate
+        # index, and we do not know its time zone, so a paper submitted hours from the
+        # cutoff can come back on the wrong side. We own the cutoff, not arXiv.
+        submitted = result.published.date()
+        if submitted < start_day or submitted > end_day:
+            dropped += 1
+            continue
+        papers.append(_to_record(result))
 
-        paper = {
-            "arxiv_id": arxiv_id,
-            "title": result.title,
-            # result.authors is a list of Author objects — we pull just the name string
-            "authors": [author.name for author in result.authors],
-            "abstract": result.summary,
-            "published": result.published.isoformat(),  # datetime → "2020-05-22T00:00:00+00:00"
-            "pdf_url": result.pdf_url,
-            "primary_category": result.primary_category,
-            # Semantic Scholar enrichment fields — populated in the next step
-            "citation_count": None,
-            "s2_pdf_url": None,
-        }
-        papers.append(paper)
-
-    logger.info(f"Fetched {len(papers)} papers from ArXiv for query: '{query}'")
-    return papers
-
-
-def enrich_with_semantic_scholar(papers: list[dict]) -> list[dict]:
-    """
-    For each paper, hit Semantic Scholar using its ArXiv ID to get
-    citation count and an open-access PDF URL if available.
-    Mutates papers in place and returns the same list.
-    """
-    for paper in tqdm(papers, desc="Enriching with Semantic Scholar", unit="paper"):
-        try:
-            s2_paper = sch.get_paper(
-                f"ArXiv:{paper['arxiv_id']}",
-                fields=["citationCount", "openAccessPdf"]
-            )
-
-            if s2_paper:
-                paper["citation_count"] = s2_paper.citationCount
-                paper["s2_pdf_url"] = (
-                    s2_paper.openAccessPdf.get("url")
-                    if s2_paper.openAccessPdf
-                    else None
-                )
-
-        except Exception as e:
-            logger.warning(f"Semantic Scholar lookup failed for {paper['arxiv_id']}: {e}")
-
-        time.sleep(1)
-
-    logger.info(f"Enrichment complete for {len(papers)} papers")
+    # Fewer papers than asked for is a fact about the date window, not an error.
+    print(f"Fetched {len(papers)} papers for '{phrase}' between {start} and {end}")
+    if dropped:
+        print(f"Dropped {dropped} papers that arXiv returned outside the window")
+    if len(papers) == max_results:
+        print(
+            f"Hit the limit of {max_results}. The window holds more papers than this."
+        )
     return papers
