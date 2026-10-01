@@ -6,7 +6,9 @@ the test uses this one instead. Run this file only when the sample needs to chan
     python tests/fixtures/make_sample_pdf.py
 
 A page here is a list of columns, and a column is a left edge and its printed lines.
-One line in the list is one printed line, the way a PDF stores text.
+One line in the list is one printed line, the way a PDF stores text. A column may carry
+a third item, "sideways", which prints it rotated a quarter turn, the way arXiv stamps
+its own identifier down the left edge of page one.
 """
 
 from pathlib import Path
@@ -69,8 +71,17 @@ def _content(columns) -> bytes:
     """Build the drawing instructions of one page."""
 
     text = ""
-    for left_edge, lines in columns:
-        text += f"BT /F1 11 Tf 14 TL {left_edge} 700 Td\n"
+    for column in columns:
+        left_edge, lines = column[0], column[1]
+        sideways = len(column) > 2 and column[2] == "sideways"
+
+        if sideways:
+            # Tm sets the text matrix. "0 1 -1 0" turns the text a quarter turn, so it
+            # reads bottom to top up the left edge of the page.
+            text += f"BT /F1 9 Tf 11 TL 0 1 -1 0 {left_edge} 300 Tm\n"
+        else:
+            text += f"BT /F1 11 Tf 14 TL {left_edge} 700 Td\n"
+
         for line in lines:
             text += f"({line}) Tj T*\n"
         text += "ET\n"
@@ -121,6 +132,27 @@ def build(pages) -> bytes:
     out += b"trailer\n<< /Size %d /Root 1 0 R >>\n" % (len(objects) + 1)
     out += b"startxref\n%d\n%%%%EOF\n" % start_of_table
     return out
+
+
+# A page carrying the arXiv stamp sideways down its left edge, beside ordinary body
+# text. Built on demand by a test rather than saved, because only one test reads it.
+STAMPED_PAGE = [
+    (
+        72,
+        [
+            "A Small Paper About Federated Learning Systems",
+            "The body of the paper starts here and runs on.",
+            "We report one result.",
+        ],
+    ),
+    (20, ["arXiv:2005.05265v1  [cs.IT]  11 May 2020"], "sideways"),
+]
+
+
+def build_with_sideways_stamp() -> bytes:
+    """One page of body text with the arXiv stamp printed sideways beside it."""
+
+    return build([STAMPED_PAGE])
 
 
 if __name__ == "__main__":
