@@ -13,7 +13,9 @@ _Avoid_: Reference, citation, article
 
 **Author-Stated Open Problem**:
 A specific problem an author says is unsolved, taken from the paper's own Limitations,
-Future Work, or Conclusion. It is a claim, not yet an Angle.
+Future Work, or Conclusion. It is a claim, not yet an Angle. It is one sentence, and the
+sentence before it and the sentence after it travel with it as its context, because a
+sentence such as "this remains an open question" carries no meaning alone.
 _Avoid_: Future work, limitation, open question
 
 **Field Scope**:
@@ -37,6 +39,9 @@ _Avoid_: Frequency, popularity, consensus
 **Snapshot**:
 The set of papers collected for one Seeded Domain, gathered once. Its collection date is
 printed on every Research Brief, because an Untouched Verdict is only true as of that date.
+One Snapshot holds the papers on both sides of a cutoff date. The cutoff belongs to
+Refutation and never to collection, and every paper carries its own publication date, so
+the side a paper falls on is read from the paper and never from where it is stored.
 _Avoid_: Corpus, index, dataset
 
 **Paper Text**:
@@ -64,9 +69,21 @@ cutoff date. Refutation classifies. It does not reject. Its verdict decides whic
 Angle the problem becomes.
 _Avoid_: Validation, verification, filtering
 
+**Candidate Verdict**:
+The answer for one Author-Stated Open Problem against one candidate later paper: Filled,
+Partly Addressed, or Untouched, with a quoted passage for anything other than Untouched.
+It is the unit the judge answers at and the unit a person hand labels. One problem carries
+several, one per candidate later paper.
+_Avoid_: Judgment, pair, label, finding
+
 **Verdict**:
 The result of Refutation: Filled, Partly Addressed, or Untouched. Any verdict other than
-Untouched carries a quoted passage from the later paper.
+Untouched carries a quoted passage from the later paper. It is the aggregate of the
+Candidate Verdicts for one problem, and the strongest claim wins: one Filled makes the
+Verdict Filled, otherwise one Partly Addressed makes it Partly Addressed, otherwise
+Untouched. One paper that solved the problem closes it, whatever the others say. The same
+rule means a single wrong Filled destroys a real Gap, so a Candidate Verdict that carries
+no quoted passage is rejected and counted, and never reaches the aggregate.
 _Avoid_: Score, rating, label
 
 **Angle**:
@@ -154,7 +171,9 @@ _Avoid_: Report, summary, output
 
 **Backtest**:
 Running Refutation with a historical cutoff date, then checking each Verdict against what
-is known today. It measures whether Refutation classifies correctly.
+is known today. It measures whether Refutation classifies correctly. A Backtest is always
+reported with the number of Verdicts it covers, because ten Verdicts is a smoke test and
+fifty is the floor for a number worth quoting.
 _Avoid_: Validation, evaluation, testing
 
 **Leak**:
