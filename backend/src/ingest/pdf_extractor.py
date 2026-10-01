@@ -180,8 +180,22 @@ def _is_two_column(page) -> bool:
     return HALF_RATIO < share_on_the_right < 1 - HALF_RATIO
 
 
+def _upright_only(page):
+    """Drop the characters printed sideways.
+
+    arXiv stamps "arXiv:2005.05265v1 [cs.IT] 11 May 2020" down the left edge of page 1,
+    rotated a quarter turn. Read with the rest of the page it arrives reversed, as
+    "0202 yaM 11", and worse, it shares rows with the body, so pdfplumber puts "0202" in
+    front of a real sentence. A paper prints nothing else sideways.
+    """
+
+    return page.filter(lambda obj: obj.get("upright", True))
+
+
 def _page_text(page) -> str:
     """Read one page, splitting it into two columns when it has two."""
+
+    page = _upright_only(page)
 
     if not _is_two_column(page):
         return _paragraphs(_strip_between(page, 0, page.width))
