@@ -6,7 +6,7 @@ check both what the function SENDS to arXiv (the query) and what it RETURNS (the
 
 from datetime import datetime, timezone
 
-from src.ingest.fetch_papers import fetch_papers
+from src.ingest.fetch_papers import fetch_papers, problem_keywords, search_later_papers
 
 
 class FakeAuthor:
@@ -138,3 +138,110 @@ def test_a_paper_outside_the_window_is_dropped():
     papers = fetch_papers("federated learning", "2019-01-01", "2021-12-31", client=client)
 
     assert papers == []
+
+
+# --- search_later_papers: the Phase 0 retrieval for one problem ---
+
+PROBLEM = (
+    "For future work, we will extend FedKT to the cross-device setting, where the "
+    "number of parties is large and the data size of each party is small."
+)
+
+
+def test_keywords_drop_the_cue_and_the_grammar():
+    words = problem_keywords(PROBLEM)
+
+    # The subject matter survives.
+    assert "fedkt" in words
+    assert "cross-device" in words
+    # The announcement and the grammar do not.
+    assert "future" not in words
+    assert "extend" not in words
+    assert "where" not in words
+
+
+def test_a_sentence_with_no_subject_matter_gives_no_keywords():
+    # "We leave this to future work" names no problem, so there is nothing to search.
+    assert problem_keywords("We leave this to future work.") == []
+
+
+def test_the_query_asks_for_any_keyword_after_the_cutoff():
+    client = make_client()
+    search_later_papers(PROBLEM, "2022-01-01", client=client)
+
+    query = client.search.query
+    assert 'abs:"fedkt"' in query
+    assert " OR " in query
+    assert " AND " in query
+    assert "submittedDate:[202201010000 TO " in query
+
+
+def test_a_problem_with_no_keywords_sends_no_search():
+    client = make_client()
+
+    papers = search_later_papers("We leave this to future work.", "2022-01-01", client=client)
+
+    assert papers == []
+    assert client.search is None
+
+
+def test_a_paper_from_before_the_cutoff_is_dropped():
+    # A paper on this side of the cutoff is not later work, so judging it as later work
+    # would be a Leak backwards.
+    old = datetime(2021, 3, 1, tzinfo=timezone.utc)
+    new = datetime(2023, 3, 1, tzinfo=timezone.utc)
+    client = FakeClient([
+        FakeResult("http://arxiv.org/abs/2103.00001v1", old, old),
+        FakeResult("http://arxiv.org/abs/2303.00001v1", new, new),
+    ])
+
+    papers = search_later_papers(PROBLEM, "2022-01-01", client=client)
+
+    assert [paper["arxiv_id"] for paper in papers] == ["2303.00001"]
+
+
+def test_the_domain_phrase_is_required_in_the_abstract():
+    client = make_client()
+    search_later_papers(PROBLEM, "2022-01-01", domain="federated learning", client=client)
+
+    assert client.search.query.startswith('abs:"federated learning" AND (')
+
+
+# --- the four cases the code review found ---
+
+def test_an_acronym_survives():
+    # A floor of four letters deleted GAN, RNN, SGD, and IID, which is where the subject
+    # matter of this field lives.
+    words = problem_keywords("We leave the extension of our GAN to RNN encoders as an open problem.")
+
+    assert "gan" in words
+    assert "rnn" in words
+
+
+def test_a_cue_inside_a_longer_word_is_left_alone():
+    # "future work" sits inside "future workloads". A plain replace left "loads" behind.
+    words = problem_keywords("We leave the handling of future workloads to later study.")
+
+    assert "workloads" in words
+    assert "loads" not in words
+
+
+def test_two_overlapping_cues_leave_nothing_behind():
+    # "open problem" sits inside "remains an open problem". Taking the short cue first
+    # left "remains" as a keyword, and the long one leaves "problem".
+    words = problem_keywords("How to choose the clipping norm remains an open problem in our setting.")
+
+    assert "remains" not in words
+    assert "problem" not in words
+    assert "clipping" in words
+
+
+def test_a_dropped_paper_is_said_out_loud(capsys):
+    # We ask for exactly max_results and filter afterwards, so a silent drop reads as
+    # "nobody addressed this problem".
+    old = datetime(2021, 3, 1, tzinfo=timezone.utc)
+    client = FakeClient([FakeResult("http://arxiv.org/abs/2103.00001v1", old, old)])
+
+    search_later_papers(PROBLEM, "2022-01-01", client=client)
+
+    assert "Dropped 1 papers submitted before the cutoff" in capsys.readouterr().out
