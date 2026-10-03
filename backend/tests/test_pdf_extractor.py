@@ -170,3 +170,22 @@ def test_stops_a_body_larger_than_the_limit(monkeypatch):
 
     # The connection closes even though a check inside the `with` raised.
     assert too_big.closed
+
+
+def test_drops_a_sideways_stamp_without_touching_the_body(monkeypatch):
+    """arXiv prints its stamp down the left edge of page 1, a quarter turn around.
+
+    It shares rows with the body, so left in place it both adds reversed junk and puts
+    its own characters in front of a real sentence.
+    """
+
+    stamped = make_sample_pdf.build_with_sideways_stamp()
+    monkeypatch.setattr(pdf_extractor.requests, "get", fake_get(FakeResponse(200, stamped)))
+
+    text = extract_paper_text("https://example.test/stamped.pdf")
+
+    assert "arXiv" not in text
+    # The stamp read backwards. Neither direction may survive.
+    assert "0202" not in text
+    # The body line the stamp sat beside is whole and unprefixed.
+    assert "The body of the paper starts here and runs on." in text

@@ -6,6 +6,8 @@ chunking, and the Chroma vector store, and they are kept because the findings ar
 still true. Design decisions for the current version live in `docs/adr/`.
 
 OBS-001 below is the one that changes the current design. See `docs/design/big-picture.md`.
+Findings from the current version are in `docs/implementation-notes.md`, and the OBS
+numbering carries on there.
 
 ## ADR-001: PDF word extraction tolerance
 
